@@ -1,32 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
+import confetti from 'canvas-confetti';
 import { CATEGORIES, getQuizQuestions } from './data/questions.js';
 import { levelInfo, nextLevelInfo, PATHS } from './data/levels.js';
 import { quizMusic } from './audio.js';
 import { LANGUAGES, t, fill, CATEGORY_T, PATH_T } from './i18n.js';
+import {
+  REQUIRES_AUTH, getState, onAuthChange,
+  signInWithGoogle, signOut, claimProfile, saveProgress, getLeaderboard,
+} from './backend.js';
 
-// ── local persistence (stand-in for real backend + Google OAuth) ──
-const USER_KEY = 'dequiz.user';
-const BOARD_KEY = 'dequiz.board';
 const LANG_KEY = 'dequiz.lang';
-
-const SEED_BOARD = [
-  { nick: 'QuantumQuokka', correct: 2140, path: 'hero' },
-  { nick: 'LogicLynx', correct: 1287, path: 'royal' },
-  { nick: 'RiddleRider', correct: 640, path: 'hero' },
-  { nick: 'SynapseSam', correct: 305, path: 'hero' },
-  { nick: 'PuzzlePilot', correct: 168, path: 'royal' },
-  { nick: 'BrainyBek', correct: 84, path: 'royal' },
-  { nick: 'CuriousCat', correct: 41, path: 'royal' },
-  { nick: 'NovaNaz', correct: 18, path: 'hero' },
-];
-
-const loadUser = () => JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-const saveUser = u => localStorage.setItem(USER_KEY, JSON.stringify(u));
-const loadBoard = () => JSON.parse(localStorage.getItem(BOARD_KEY) || 'null') || SEED_BOARD;
-const saveBoard = b => localStorage.setItem(BOARD_KEY, JSON.stringify(b));
 const loadLang = () => localStorage.getItem(LANG_KEY) || 'en';
 
-// English needs plural "s"; kk/ru templates omit the {s} token entirely.
 const plural = (lang, n) => (lang === 'en' && n !== 1 ? 's' : '');
 
 function resultMsg(lang, score) {
@@ -37,33 +22,54 @@ function resultMsg(lang, score) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(loadUser);
-  const [screen, setScreen] = useState(user ? 'home' : 'welcome');
+  const [user, setUser] = useState(null);      // profile or null
+  const [authed, setAuthed] = useState(false);  // signed in but maybe no profile yet
+  const [screen, setScreen] = useState('boot');
   const [selectedCats, setSelectedCats] = useState([]);
-  const [session, setSession] = useState(null); // { questions, index, correct, picked, results }
-  const [levelUp, setLevelUp] = useState(null); // level object to celebrate
+  const [session, setSession] = useState(null);
+  const [levelUp, setLevelUp] = useState(null);
   const [muted, setMuted] = useState(false);
-  const [rankChange, setRankChange] = useState(null); // { from, to } (0-based ranks)
+  const [rankChange, setRankChange] = useState(null);
   const [lang, setLang] = useState(loadLang);
 
   const path = user?.path || 'hero';
   const level = levelInfo(user?.correct || 0, path, lang);
   const next = nextLevelInfo(user?.correct || 0, path, lang);
 
-  useEffect(() => { if (user) saveUser(user); }, [user]);
+  useEffect(() => {
+    let alive = true;
+    async function sync() {
+      const st = await getState();
+      if (!alive) return;
+      setAuthed(st.authed);
+      setUser(st.profile);
+      setScreen(st.profile ? 'home' : 'welcome');
+    }
+    sync();
+    const off = onAuthChange(sync);
+    return () => { alive = false; off(); };
+  }, []);
+
   useEffect(() => { localStorage.setItem(LANG_KEY, lang); }, [lang]);
 
-  // background music plays only during the quiz screen
   useEffect(() => {
     if (screen === 'quiz') quizMusic.start();
     else quizMusic.stop();
     return () => quizMusic.stop();
   }, [screen]);
 
-  function register(nick, chosenPath) {
-    const u = { nick, path: chosenPath, correct: 0, quizzes: 0, best: 0, joined: Date.now() };
-    setUser(u);
+  async function register(nick, chosenPath) {
+    const profile = await claimProfile(nick, chosenPath); // throws 'nickname-taken'
+    setUser(profile);
+    setAuthed(true);
     setScreen('home');
+  }
+
+  async function doSignOut() {
+    await signOut();
+    setUser(null);
+    setAuthed(false);
+    setScreen('welcome');
   }
 
   function startQuiz() {
@@ -91,59 +97,74 @@ export default function App() {
     });
   }
 
+  async function finishQuiz() {
+    const before = levelInfo(user.correct, path, lang);
+    const newTotal = user.correct + session.correct;
+    const after = levelInfo(newTotal, path, lang);
+    const updated = { ...user, correct: newTotal, quizzes: user.quizzes + 1, best: Math.max(user.best, session.correct) };
+
+    const boardBefore = await getLeaderboard(200);
+    let fromRank = boardBefore.findIndex(e => e.nick === updated.nick);
+    if (fromRank === -1) fromRank = boardBefore.length;
+
+    await saveProgress(updated, { correct: newTotal, quizzes: updated.quizzes, best: updated.best });
+    setUser(updated);
+
+    const boardAfter = await getLeaderboard(200);
+    let toRank = boardAfter.findIndex(e => e.nick === updated.nick);
+    if (toRank === -1) toRank = fromRank;
+    setRankChange({ from: fromRank, to: toRank });
+
+    if (after.level > before.level) setLevelUp(after);
+    setScreen('results');
+  }
+
   function nextQuestion() {
     if (session.index + 1 < session.questions.length) {
       setSession(s => ({ ...s, index: s.index + 1, picked: null }));
     } else {
-      const before = levelInfo(user.correct, path, lang);
-      const newTotal = user.correct + session.correct;
-      const after = levelInfo(newTotal, path, lang);
-      const updated = { ...user, correct: newTotal, quizzes: user.quizzes + 1, best: Math.max(user.best, session.correct) };
-      setUser(updated);
-
-      // compute rank movement on the global board
-      const prevBoard = loadBoard();
-      const sortedBefore = [...prevBoard].sort((a, b) => b.correct - a.correct);
-      let fromRank = sortedBefore.findIndex(e => e.nick === updated.nick);
-      if (fromRank === -1) fromRank = sortedBefore.length; // wasn't ranked yet
-      const board = prevBoard.filter(e => e.nick !== updated.nick);
-      board.push({ nick: updated.nick, correct: newTotal, path });
-      saveBoard(board);
-      const toRank = [...board].sort((a, b) => b.correct - a.correct).findIndex(e => e.nick === updated.nick);
-      setRankChange({ from: fromRank, to: toRank });
-
-      if (after.level > before.level) setLevelUp(after);
-      setScreen('results');
+      finishQuiz();
     }
   }
 
   return (
     <div className="app">
       <BgOrbs />
-      {screen !== 'welcome' && user && (
+      {screen !== 'welcome' && screen !== 'boot' && user && (
         <header className="topbar">
           <button className="brand" onClick={() => setScreen('home')}>De<span>Quiz</span></button>
           <nav>
             <LangSwitch lang={lang} setLang={setLang} />
             <button className={screen === 'board' ? 'active' : ''} onClick={() => setScreen('board')}>🏆 {t(lang, 'leaderboard')}</button>
             <span className="chip" title={level.name}>{level.character} {t(lang, 'lv')} {level.level} · {user.correct}✓</span>
+            <button className="signout-btn" onClick={doSignOut} title={t(lang, 'signOut')}>⎋</button>
           </nav>
         </header>
       )}
 
-      {screen === 'welcome' && <Welcome lang={lang} setLang={setLang} onRegister={register} />}
-      {screen === 'home' && user && (
-        <Home lang={lang} user={user} level={level} next={next}
-          selectedCats={selectedCats} setSelectedCats={setSelectedCats} onStart={startQuiz} />
-      )}
-      {screen === 'quiz' && session && (
-        <Quiz lang={lang} session={session} onPick={pick} onNext={nextQuestion} muted={muted} onToggleMute={toggleMute} />
-      )}
-      {screen === 'results' && session && (
-        <Results lang={lang} session={session} user={user} level={level} next={next}
-          onAgain={() => setScreen('home')} onBoard={() => setScreen('board')} />
-      )}
-      {screen === 'board' && <Leaderboard lang={lang} me={user?.nick} rankChange={rankChange} onBack={() => setScreen('home')} />}
+      <div key={screen} className="screen-layer">
+        {screen === 'boot' && (
+          <main className="center-screen">
+            <div className="logo-burst">🧠</div>
+            <p className="subtitle" style={{ marginTop: 18 }}>{t(lang, 'loading')}</p>
+          </main>
+        )}
+        {screen === 'welcome' && (
+          <Welcome lang={lang} setLang={setLang} authed={authed} onRegister={register} />
+        )}
+        {screen === 'home' && user && (
+          <Home lang={lang} user={user} level={level} next={next}
+            selectedCats={selectedCats} setSelectedCats={setSelectedCats} onStart={startQuiz} />
+        )}
+        {screen === 'quiz' && session && (
+          <Quiz lang={lang} session={session} onPick={pick} onNext={nextQuestion} muted={muted} onToggleMute={toggleMute} />
+        )}
+        {screen === 'results' && session && (
+          <Results lang={lang} session={session} user={user} level={level} next={next}
+            onAgain={() => setScreen('home')} onBoard={() => setScreen('board')} />
+        )}
+        {screen === 'board' && <Leaderboard lang={lang} me={user?.nick} rankChange={rankChange} onBack={() => setScreen('home')} />}
+      </div>
 
       {levelUp && <LevelUpModal lang={lang} level={levelUp} onClose={() => setLevelUp(null)} />}
     </div>
@@ -166,18 +187,12 @@ function LangSwitch({ lang, setLang }) {
 
 function BgOrbs() {
   const stars = useMemo(() => Array.from({ length: 60 }, () => ({
-    left: Math.random() * 100,
-    top: Math.random() * 100,
-    size: Math.random() * 2 + 1,
-    delay: Math.random() * 4,
-    dur: Math.random() * 3 + 2,
+    left: Math.random() * 100, top: Math.random() * 100, size: Math.random() * 2 + 1,
+    delay: Math.random() * 4, dur: Math.random() * 3 + 2,
   })), []);
   const particles = useMemo(() => Array.from({ length: 22 }, () => ({
-    left: Math.random() * 100,
-    size: Math.random() * 10 + 5,
-    delay: Math.random() * 16,
-    dur: Math.random() * 12 + 12,
-    hue: Math.random() > 0.5 ? 'a' : 'b',
+    left: Math.random() * 100, size: Math.random() * 10 + 5,
+    delay: Math.random() * 16, dur: Math.random() * 12 + 12, hue: Math.random() > 0.5 ? 'a' : 'b',
   })), []);
   return (
     <div className="bg" aria-hidden="true">
@@ -205,11 +220,35 @@ function BgOrbs() {
   );
 }
 
-function Welcome({ lang, setLang, onRegister }) {
-  const [step, setStep] = useState(0); // 0 = google, 1 = nickname, 2 = path
+function Welcome({ lang, setLang, authed, onRegister }) {
+  const [step, setStep] = useState(authed && REQUIRES_AUTH ? 1 : 0);
   const [nick, setNick] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
   const ok = nick.trim().length >= 3;
   const paths = PATH_T[lang] || PATH_T.en;
+
+  useEffect(() => { if (authed && REQUIRES_AUTH) setStep(s => (s === 0 ? 1 : s)); }, [authed]);
+
+  async function handleGoogle() {
+    setError(null);
+    if (!REQUIRES_AUTH) { setStep(1); return; }
+    setBusy(true);
+    try { await signInWithGoogle(); }
+    catch { setBusy(false); setError(t(lang, 'signInError')); }
+  }
+
+  async function choosePath(pathId) {
+    setBusy(true); setError(null);
+    try {
+      await onRegister(nick.trim(), pathId);
+    } catch (e) {
+      setBusy(false);
+      setError(e.message === 'nickname-taken' ? t(lang, 'nickTaken') : t(lang, 'signInError'));
+      setStep(1);
+    }
+  }
+
   return (
     <main className="center-screen">
       <div className="welcome-lang"><LangSwitch lang={lang} setLang={setLang} /></div>
@@ -219,19 +258,21 @@ function Welcome({ lang, setLang, onRegister }) {
         <p className="subtitle">{t(lang, 'subtitle')}</p>
 
         {step === 0 && (
-          <>
-            <button className="google-btn" onClick={() => setStep(1)}>
+          <div className="fade-in">
+            <button className="google-btn" onClick={handleGoogle} disabled={busy}>
               <GoogleIcon /> {t(lang, 'continueGoogle')}
             </button>
-            <p className="fineprint">{t(lang, 'demoNote')}</p>
-          </>
+            <p className="fineprint">{REQUIRES_AUTH ? '' : t(lang, 'demoNote')}</p>
+            {error && <p className="form-error">{error}</p>}
+          </div>
         )}
 
         {step === 1 && (
-          <form className="nick-form" onSubmit={e => { e.preventDefault(); if (ok) setStep(2); }}>
+          <form className="nick-form" onSubmit={e => { e.preventDefault(); if (ok) { setError(null); setStep(2); } }}>
             <label htmlFor="nick">{t(lang, 'chooseNick')}</label>
             <input id="nick" autoFocus value={nick} maxLength={20}
               onChange={e => setNick(e.target.value)} placeholder={t(lang, 'nickPlaceholder')} />
+            {error && <p className="form-error">{error}</p>}
             <button className="cta" disabled={!ok}>{t(lang, 'next')}</button>
           </form>
         )}
@@ -241,22 +282,23 @@ function Welcome({ lang, setLang, onRegister }) {
             <label className="path-label">{fill(t(lang, 'choosePath'), { name: nick.trim() })}</label>
             <div className="path-grid">
               {Object.values(PATHS).map((p, i) => (
-                <button key={p.id} className="path-card" style={{ animationDelay: `${i * 0.1}s` }}
-                  onClick={() => onRegister(nick.trim(), p.id)}>
+                <button key={p.id} className="path-card" disabled={busy} style={{ animationDelay: `${i * 0.1}s` }}
+                  onClick={() => choosePath(p.id)}>
                   <span className="path-icon">{p.icon}</span>
                   <strong>{paths[p.id].label}</strong>
                   <small>{paths[p.id].blurb}</small>
                 </button>
               ))}
             </div>
-            <button className="link-back" onClick={() => setStep(1)}>{t(lang, 'back')}</button>
+            {busy && <p className="fineprint">{t(lang, 'claiming')}</p>}
+            <button className="link-back" onClick={() => setStep(1)} disabled={busy}>{t(lang, 'back')}</button>
           </div>
         )}
       </div>
       {step < 2 && (
         <div className="hero-cats">
-          {CATEGORIES.map((c, i) => (
-            <div className="float-emoji" style={{ animationDelay: `${i * 0.6}s` }} key={c.id}>{c.emoji}</div>
+          {CATEGORIES.slice(0, 5).map((c, i) => (
+            <div className="float-emoji" style={{ animationDelay: `${i * 0.4}s` }} key={c.id}>{c.emoji}</div>
           ))}
         </div>
       )}
@@ -307,8 +349,8 @@ function Home({ lang, user, level, next, selectedCats, setSelectedCats, onStart 
 
       <h3 className="section-title">{t(lang, 'pickTopics')} <span>{t(lang, 'pickTopicsHint')}</span></h3>
       <div className="cat-grid">
-        {CATEGORIES.map(c => (
-          <button key={c.id}
+        {CATEGORIES.map((c, i) => (
+          <button key={c.id} style={{ animationDelay: `${i * 0.04}s` }}
             className={`cat-card ${selectedCats.includes(c.id) ? 'selected' : ''}`}
             onClick={() => toggle(c.id)}>
             <span className="cat-emoji">{c.emoji}</span>
@@ -377,6 +419,22 @@ function Quiz({ lang, session, onPick, onNext, muted, onToggleMute }) {
   );
 }
 
+function CountUp({ to }) {
+  const [val, setVal] = useState(to);
+  useEffect(() => {
+    setVal(0);
+    let cur = 0;
+    const step = Math.max(1, Math.ceil(to / 14));
+    const id = setInterval(() => {
+      cur = Math.min(to, cur + step);
+      setVal(cur);
+      if (cur >= to) clearInterval(id);
+    }, 55);
+    return () => clearInterval(id);
+  }, [to]);
+  return <>{val}</>;
+}
+
 function Results({ lang, session, user, level, next, onAgain, onBoard }) {
   const score = session.correct;
   const msg = resultMsg(lang, score);
@@ -388,7 +446,7 @@ function Results({ lang, session, user, level, next, onAgain, onBoard }) {
     <main className="center-screen">
       <div className="results-card">
         <div className="avatar big-avatar bounce">{level.character}</div>
-        <h1 className="score-line"><span className="score-num">{score}</span>/10</h1>
+        <h1 className="score-line"><span className="score-num"><CountUp to={score} /></span>/10</h1>
         <p className="score-msg">{msg}</p>
         <div className="bar"><div className="bar-fill" style={{ width: `${progress}%` }} /></div>
         <p className="bar-label">
@@ -406,65 +464,78 @@ function Results({ lang, session, user, level, next, onAgain, onBoard }) {
 }
 
 function Leaderboard({ lang, me, rankChange, onBack }) {
-  const board = useMemo(() => loadBoard().sort((a, b) => b.correct - a.correct), []);
   const medals = ['🥇', '🥈', '🥉'];
   const climbed = rankChange && rankChange.to < rankChange.from;
   const jumped = climbed ? rankChange.from - rankChange.to : 0;
-  const ROW = 68; // px per row incl. gap, used to compute the climb distance
+  const ROW = 68;
+  const [order, setOrder] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    getLeaderboard(50).then(final => {
+      if (alive) setOrder(final);
+    });
+    return () => { alive = false; };
+  }, []);
 
   return (
     <main className="page">
       <h2 className="section-title">{t(lang, 'globalLeaderboard')}</h2>
       {climbed && (
-        <div className="climb-banner">{fill(t(lang, 'climbBanner'), { n: jumped, s: plural(lang, jumped), rank: rankChange.to + 1 })}</div>
+        <div className="climb-banner">
+          {fill(t(lang, 'climbBanner'), { n: jumped, s: plural(lang, jumped), rank: rankChange.to + 1 })}
+        </div>
       )}
-      <div className="board">
-        {board.map((e, i) => {
-          const lvl = levelInfo(e.correct, e.path || 'hero', lang);
-          const isMe = e.nick === me;
-          const climbing = isMe && climbed;
-          return (
-            <div key={e.nick}
-              className={`board-row ${isMe ? 'me' : ''} ${climbing ? 'climbing' : ''}`}
-              style={climbing
-                ? { '--climb': `${jumped * ROW}px` }
-                : { animationDelay: `${i * 0.06}s` }}>
-              <span className="rank">{medals[i] || i + 1}</span>
-              <span className="board-char">{lvl.character}</span>
-              <span className="board-nick">
-                {e.nick}{isMe && ` ${t(lang, 'you')}`}
-                {climbing && <span className="rank-up">▲ {jumped}</span>}
-              </span>
-              <span className="board-lvl">{t(lang, 'lv')} {lvl.level}</span>
-              <span className="board-score">{e.correct} ✓</span>
-            </div>
-          );
-        })}
-      </div>
+      {!order ? (
+        <p className="bar-label" style={{ textAlign: 'center' }}>{t(lang, 'loading')}</p>
+      ) : (
+        <div className="board">
+          {order.map((e, i) => {
+            const lvl = levelInfo(e.correct, e.path || 'hero', lang);
+            const isMe = e.nick === me;
+            const climbing = isMe && climbed;
+            return (
+              <div key={e.nick}
+                className={`board-row ${isMe ? 'me' : ''} ${climbing ? 'climbing' : ''}`}
+                style={climbing ? { '--climb': `${jumped * ROW}px` } : { animationDelay: `${i * 0.05}s` }}>
+                <span className="rank">{medals[i] || i + 1}</span>
+                <span className="board-char">{lvl.character}</span>
+                <span className="board-nick">
+                  {e.nick}{isMe && ` ${t(lang, 'you')}`}
+                  {climbing && <span className="rank-up">▲ {jumped}</span>}
+                </span>
+                <span className="board-lvl">{t(lang, 'lv')} {lvl.level}</span>
+                <span className="board-score">{e.correct} ✓</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <button className="ghost" onClick={onBack}>{t(lang, 'back')}</button>
     </main>
   );
 }
 
 function LevelUpModal({ lang, level, onClose }) {
+  useEffect(() => {
+    const colors = [level.color, '#21d4fd', '#facc15', '#fb7185'];
+    confetti({ particleCount: 140, spread: 100, startVelocity: 45, origin: { y: 0.4 }, colors, zIndex: 100 });
+    const end = Date.now() + 900;
+    let raf;
+    (function frame() {
+      confetti({ particleCount: 4, angle: 60, spread: 60, origin: { x: 0, y: 0.6 }, colors, zIndex: 100 });
+      confetti({ particleCount: 4, angle: 120, spread: 60, origin: { x: 1, y: 0.6 }, colors, zIndex: 100 });
+      if (Date.now() < end) raf = requestAnimationFrame(frame);
+    })();
+    return () => cancelAnimationFrame(raf);
+  }, [level.color]);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="levelup" style={{ '--lvl': level.color }} onClick={e => e.stopPropagation()}>
-        <div className="confetti" aria-hidden="true">
-          {Array.from({ length: 28 }).map((_, i) => (
-            <i key={i} style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i % 8) * 0.15}s` }} />
-          ))}
-        </div>
         <div className="char-stage" aria-hidden="true">
           <div className="rays" />
-          <div className="ring r1" />
-          <div className="ring r2" />
-          <div className="ring r3" />
-          <div className="sparks">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <b key={i} style={{ '--a': `${i * 30}deg`, animationDelay: `${0.3 + (i % 6) * 0.05}s` }} />
-            ))}
-          </div>
+          <div className="ring r1" /><div className="ring r2" /><div className="ring r3" />
           <div className="levelup-char">{level.character}</div>
         </div>
         <h2>{t(lang, 'levelUp')}</h2>

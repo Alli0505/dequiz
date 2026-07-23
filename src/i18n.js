@@ -42,6 +42,11 @@ export const UI = {
     levelUp: 'LEVEL UP!',
     awesome: 'Awesome!',
     language: 'Language',
+    loading: 'Loading…',
+    signOut: 'Sign out',
+    nickTaken: 'That nickname is taken — try another.',
+    signInError: 'Sign-in failed. Please try again.',
+    claiming: 'Setting up…',
   },
   kk: {
     subtitle: 'Ойыңды ұштай түс. Кейіпкеріңді дамыт. Әлемді бағында.',
@@ -77,6 +82,11 @@ export const UI = {
     levelUp: 'ДЕҢГЕЙ ӨСТІ!',
     awesome: 'Тамаша!',
     language: 'Тіл',
+    loading: 'Жүктелуде…',
+    signOut: 'Шығу',
+    nickTaken: 'Бұл лақап ат бос емес — басқасын таңда.',
+    signInError: 'Кіру сәтсіз аяқталды. Қайталап көр.',
+    claiming: 'Дайындалуда…',
   },
   ru: {
     subtitle: 'Оттачивай ум. Прокачивай персонажа. Покоряй мир.',
@@ -112,6 +122,11 @@ export const UI = {
     levelUp: 'НОВЫЙ УРОВЕНЬ!',
     awesome: 'Отлично!',
     language: 'Язык',
+    loading: 'Загрузка…',
+    signOut: 'Выйти',
+    nickTaken: 'Этот никнейм занят — выбери другой.',
+    signInError: 'Не удалось войти. Попробуйте ещё раз.',
+    claiming: 'Настройка…',
   },
 };
 

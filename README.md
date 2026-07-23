@@ -12,13 +12,15 @@ A modern, animated multiple-choice quiz web app. Sharpen your mind, level up an 
 - **Global leaderboard** — with an animated "climb" when your rank improves after a quiz.
 - **Full localization** — every screen, category, character name, and all 200 questions in English, Kazakh, and Russian. Language switches live and is remembered.
 - **Ambient background music** — generated procedurally with the Web Audio API (no audio files), with a mute toggle.
-- **Rich animated UI** — drifting aurora background, twinkling stars, floating particles, and micro-interactions throughout. Fully responsive.
+- **Rich animated UI** — drifting aurora background, twinkling stars, floating particles, celebration confetti, and micro-interactions throughout. Fully responsive.
+- **Optional real backend** — Google sign-in, a genuinely global leaderboard, and enforced unique nicknames via Supabase. Works with **no backend** out of the box (local mode); flip on env vars to go live. See [SETUP.md](SETUP.md).
 
 ## Tech stack
 
 - [Vite](https://vitejs.dev/) + [React](https://react.dev/)
-- Plain CSS animations (no UI libraries)
-- All client-side — progress, the leaderboard, and language choice persist in `localStorage`
+- Plain CSS animations + [canvas-confetti](https://github.com/catdad/canvas-confetti) (no heavy animation libraries)
+- [Supabase](https://supabase.com/) (Postgres + Google OAuth) — optional; the app degrades to `localStorage` when unconfigured
+- Client-side — progress, leaderboard, and language choice persist locally, or in Supabase when connected
 
 ## Getting started
 
@@ -49,8 +51,12 @@ src/
     levels.js          # thresholds, colors, character emoji, level lookups
 ```
 
+## Deployment & backend
+
+Deploy the static build anywhere (Vercel recommended). To enable real Google sign-in and a global leaderboard, create a Supabase project + Google OAuth client and set two env vars — full step-by-step in **[SETUP.md](SETUP.md)**. The database schema is in [`supabase/schema.sql`](supabase/schema.sql).
+
 ## Notes
 
-This is an MVP. Google sign-in is currently simulated locally and the leaderboard is client-side with seeded players — a real backend (OAuth, a shared global leaderboard, and nickname uniqueness) is the natural next step.
+Without Supabase env vars the app runs in local mode: sign-in is simulated and the leaderboard is seeded in `localStorage`. Scores are written from the client — for a hardened competitive leaderboard, move score-writing behind a Supabase Edge Function later.
 
 The Kazakh and Russian translations were written by hand; the Kazakh set is worth a native speaker's spot-check.
