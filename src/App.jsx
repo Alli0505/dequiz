@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { CATEGORIES, getQuizQuestions } from './data/questions.js';
 import { levelInfo, nextLevelInfo, PATHS } from './data/levels.js';
-import { quizMusic } from './audio.js';
+import { quizMusic, sfx } from './audio.js';
 import { LANGUAGES, t, fill, CATEGORY_T, PATH_T } from './i18n.js';
 import {
   REQUIRES_AUTH, getState, onAuthChange,
@@ -10,9 +10,16 @@ import {
 } from './backend.js';
 
 const LANG_KEY = 'dequiz.lang';
+const BEST_KEY = 'dequiz.bestPoints';
+const QTIME = 20; // seconds per question
 const loadLang = () => localStorage.getItem(LANG_KEY) || 'en';
 
 const plural = (lang, n) => (lang === 'en' && n !== 1 ? 's' : '');
+
+// points for a correct answer: base + speed bonus (up to 60) + streak bonus
+function pointsFor(timeLeft, streak) {
+  return 100 + Math.round((Math.max(0, timeLeft) / QTIME) * 60) + (streak - 1) * 20;
+}
 
 function resultMsg(lang, score) {
   if (score >= 9) return t(lang, 'msgGenius');
@@ -74,18 +81,31 @@ export default function App() {
 
   function startQuiz() {
     setRankChange(null);
-    setSession({ questions: getQuizQuestions(selectedCats, 10, lang), index: 0, correct: 0, picked: null, results: [] });
+    setSession({
+      questions: getQuizQuestions(selectedCats, 10, lang),
+      index: 0, correct: 0, picked: null, results: [],
+      points: 0, streak: 0, bestStreak: 0,
+    });
     setScreen('quiz');
   }
 
-  function pick(i) {
+  // i === -1 means the timer ran out (counts as wrong, no selection)
+  function pick(i, timeLeft = 0) {
     if (session.picked !== null) return;
     const q = session.questions[session.index];
     const isRight = i === q.answer;
+    sfx.play(isRight ? 'correct' : 'wrong');
     setSession(s => {
       const results = [...s.results];
       results[s.index] = isRight;
-      return { ...s, picked: i, correct: s.correct + (isRight ? 1 : 0), results };
+      const streak = isRight ? s.streak + 1 : 0;
+      const gained = isRight ? pointsFor(timeLeft, streak) : 0;
+      return {
+        ...s, picked: i, results,
+        correct: s.correct + (isRight ? 1 : 0),
+        streak, bestStreak: Math.max(s.bestStreak, streak),
+        points: s.points + gained,
+      };
     });
   }
 
@@ -93,6 +113,7 @@ export default function App() {
     setMuted(m => {
       const nextMuted = !m;
       quizMusic.setMuted(nextMuted);
+      sfx.setMuted(nextMuted);
       return nextMuted;
     });
   }
@@ -115,7 +136,13 @@ export default function App() {
     if (toRank === -1) toRank = fromRank;
     setRankChange({ from: fromRank, to: toRank });
 
-    if (after.level > before.level) setLevelUp(after);
+    // personal-best points (client-side)
+    const prevBest = Number(localStorage.getItem(BEST_KEY) || 0);
+    const isBest = session.points > prevBest && session.points > 0;
+    if (isBest) localStorage.setItem(BEST_KEY, String(session.points));
+    setSession(s => ({ ...s, newBest: isBest }));
+
+    if (after.level > before.level) { sfx.play('levelup'); setLevelUp(after); }
     setScreen('results');
   }
 
@@ -371,6 +398,29 @@ function Quiz({ lang, session, onPick, onNext, muted, onToggleMute }) {
   const answered = session.picked !== null;
   const cat = CATEGORIES.find(c => c.id === q.category);
   const catName = (CATEGORY_T[lang] || CATEGORY_T.en)[q.category].name;
+
+  const [remaining, setRemaining] = useState(QTIME * 1000);
+  const answeredRef = useRef(answered);
+  answeredRef.current = answered;
+  const remainingRef = useRef(remaining);
+  remainingRef.current = remaining;
+
+  // per-question countdown; resets when the question changes, stops on answer
+  useEffect(() => {
+    setRemaining(QTIME * 1000);
+    const start = performance.now();
+    const id = setInterval(() => {
+      if (answeredRef.current) { clearInterval(id); return; }
+      const rem = QTIME * 1000 - (performance.now() - start);
+      if (rem <= 0) { setRemaining(0); clearInterval(id); onPick(-1, 0); return; }
+      setRemaining(rem);
+    }, 100);
+    return () => clearInterval(id);
+  }, [q.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pct = Math.max(0, (remaining / (QTIME * 1000)) * 100);
+  const timedOut = session.picked === -1;
+
   return (
     <main className="page quiz">
       <div className="quiz-head">
@@ -384,11 +434,17 @@ function Quiz({ lang, session, onPick, onNext, muted, onToggleMute }) {
           })}
         </div>
         <div className="quiz-head-right">
+          {session.streak >= 2 && <span className="streak-chip">🔥 {session.streak}</span>}
+          <span className="pts-chip">⚡ {session.points}</span>
           <button className="mute-btn" onClick={onToggleMute} title={muted ? t(lang, 'unmute') : t(lang, 'mute')}>
             {muted ? '🔇' : '🔊'}
           </button>
           <span className="score-chip">✓ {session.correct}</span>
         </div>
+      </div>
+
+      <div className="timer-bar">
+        <div className={`timer-fill ${pct < 30 ? 'low' : ''} ${answered ? 'paused' : ''}`} style={{ width: `${pct}%` }} />
       </div>
 
       <div className="q-card" key={q.id}>
@@ -403,16 +459,19 @@ function Quiz({ lang, session, onPick, onNext, muted, onToggleMute }) {
               else cls += ' dim';
             }
             return (
-              <button key={i} className={cls} onClick={() => onPick(i)} disabled={answered}>
+              <button key={i} className={cls} onClick={() => onPick(i, remainingRef.current / 1000)} disabled={answered}>
                 <span className="opt-letter">{String.fromCharCode(65 + i)}</span> {opt}
               </button>
             );
           })}
         </div>
         {answered && (
-          <button className="cta next-btn" onClick={onNext}>
-            {session.index + 1 < n ? t(lang, 'nextQuestion') : t(lang, 'seeResults')}
-          </button>
+          <>
+            {timedOut && <p className="time-up">{t(lang, 'timeUp')}</p>}
+            <button className="cta next-btn" onClick={onNext}>
+              {session.index + 1 < n ? t(lang, 'nextQuestion') : t(lang, 'seeResults')}
+            </button>
+          </>
         )}
       </div>
     </main>
@@ -448,6 +507,11 @@ function Results({ lang, session, user, level, next, onAgain, onBoard }) {
         <div className="avatar big-avatar bounce">{level.character}</div>
         <h1 className="score-line"><span className="score-num"><CountUp to={score} /></span>/10</h1>
         <p className="score-msg">{msg}</p>
+        <div className="stat-row">
+          <div className="stat"><span className="stat-val">⚡ <CountUp to={session.points} /></span><span className="stat-key">{t(lang, 'points')}</span></div>
+          <div className="stat"><span className="stat-val">🔥 {session.bestStreak}</span><span className="stat-key">{t(lang, 'streakLabel')}</span></div>
+        </div>
+        {session.newBest && <p className="new-best">{t(lang, 'newBest')}</p>}
         <div className="bar"><div className="bar-fill" style={{ width: `${progress}%` }} /></div>
         <p className="bar-label">
           {next

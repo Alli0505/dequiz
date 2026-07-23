@@ -98,3 +98,53 @@ class QuizMusic {
 }
 
 export const quizMusic = new QuizMusic();
+
+// ── short sound effects (procedural, share the mute state) ──
+class Sfx {
+  constructor() {
+    this.ctx = null;
+    this.muted = false;
+  }
+  _ac() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) this.ctx = new AC();
+    }
+    return this.ctx;
+  }
+  setMuted(m) { this.muted = m; }
+
+  _note(ctx, t, freq, gain, type, dur, glideTo) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ctx.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  play(type) {
+    if (this.muted) return;
+    const ctx = this._ac();
+    if (!ctx) return;
+    ctx.resume?.();
+    const t = ctx.currentTime;
+    if (type === 'correct') {
+      this._note(ctx, t, 660, 0.14, 'sine', 0.12);
+      this._note(ctx, t + 0.09, 990, 0.14, 'sine', 0.16);
+    } else if (type === 'wrong') {
+      this._note(ctx, t, 220, 0.16, 'sawtooth', 0.28, 110);
+    } else if (type === 'levelup') {
+      [523, 659, 784, 1047].forEach((f, i) => this._note(ctx, t + i * 0.1, f, 0.13, 'triangle', 0.22));
+    } else if (type === 'tick') {
+      this._note(ctx, t, 880, 0.05, 'square', 0.05);
+    }
+  }
+}
+
+export const sfx = new Sfx();

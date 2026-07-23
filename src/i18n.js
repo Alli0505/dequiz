@@ -47,6 +47,10 @@ export const UI = {
     nickTaken: 'That nickname is taken — try another.',
     signInError: 'Sign-in failed. Please try again.',
     claiming: 'Setting up…',
+    timeUp: '⏱ Time\'s up!',
+    points: 'points',
+    streakLabel: 'best streak',
+    newBest: '🏆 New personal best!',
   },
   kk: {
     subtitle: 'Ойыңды ұштай түс. Кейіпкеріңді дамыт. Әлемді бағында.',
@@ -87,6 +91,10 @@ export const UI = {
     nickTaken: 'Бұл лақап ат бос емес — басқасын таңда.',
     signInError: 'Кіру сәтсіз аяқталды. Қайталап көр.',
     claiming: 'Дайындалуда…',
+    timeUp: '⏱ Уақыт бітті!',
+    points: 'ұпай',
+    streakLabel: 'ең үздік серия',
+    newBest: '🏆 Жаңа жеке рекорд!',
   },
   ru: {
     subtitle: 'Оттачивай ум. Прокачивай персонажа. Покоряй мир.',
@@ -127,6 +135,10 @@ export const UI = {
     nickTaken: 'Этот никнейм занят — выбери другой.',
     signInError: 'Не удалось войти. Попробуйте ещё раз.',
     claiming: 'Настройка…',
+    timeUp: '⏱ Время вышло!',
+    points: 'очков',
+    streakLabel: 'лучшая серия',
+    newBest: '🏆 Новый личный рекорд!',
   },
 };
 
