@@ -7,6 +7,13 @@ import { QUESTIONS_RU } from './questions.ru.js';
 
 const PACKS = { kk: QUESTIONS_KK, ru: QUESTIONS_RU };
 
+// Per-category overrides for timer (seconds) and max points per question.
+// Defaults (elsewhere): 20s, streak/speed scoring. Brain Busters are harder,
+// so they get more time and a fixed 100-point cap (no streak stacking).
+export const CATEGORY_META = {
+  hardcrit: { time: 90, max: 100 },
+};
+
 // category id + emoji only; names/blurbs are localised in ../i18n.js (CATEGORY_T)
 export const CATEGORIES = [
   { id: 'logic', emoji: '🧩' },
@@ -14,6 +21,7 @@ export const CATEGORIES = [
   { id: 'critical', emoji: '🧠' },
   { id: 'verbal', emoji: '💬' },
   { id: 'lateral', emoji: '💡' },
+  { id: 'hardcrit', emoji: '🧨' },
   { id: 'kazlit', emoji: '📖' },
   { id: 'kazhist', emoji: '🏛️' },
   { id: 'geo', emoji: '🌍' },
@@ -241,6 +249,58 @@ export const QUESTIONS = [
   { id: 198, category: 'sport', q: 'About how long is a marathon?', options: ['about 21 km', 'about 42 km', 'about 100 km', 'about 10 km'], answer: 1 },
   { id: 199, category: 'sport', q: 'Which sport uses the terms “strike” and “spare”?', options: ['golf', 'bowling', 'boxing', 'tennis'], answer: 1 },
   { id: 200, category: 'sport', q: 'Which of these is a Winter Olympic sport?', options: ['beach volleyball', 'figure skating', 'surfing', 'cricket'], answer: 1 },
+
+  // ─── BRAIN BUSTERS — hard critical thinking (50) · 90s timer, max 100 pts ───
+  { id: 201, category: 'hardcrit', q: 'Which is more probable: (a) Linda is a bank teller, or (b) Linda is a bank teller AND an activist?', options: ['(a) — a conjunction is never more probable than one of its parts', '(b) — the extra detail makes it more likely', 'They are exactly equally probable', 'Impossible to compare'], answer: 0 },
+  { id: 202, category: 'hardcrit', q: 'A disease affects 1 in 1000 people. A test never misses it but has a 5% false-positive rate. You test positive. Roughly how likely is it you have the disease?', options: ['About 95%', 'About 50%', 'About 2%', 'About 99%'], answer: 2 },
+  { id: 203, category: 'hardcrit', q: 'You pick door 1 of 3; the host, who knows what’s behind them, opens door 3 to reveal a goat. Should you switch to door 2?', options: ['No — it is now 50/50', 'Yes — switching wins 2/3 of the time', 'No — switching wins only 1/3', 'It makes no difference'], answer: 1 },
+  { id: 204, category: 'hardcrit', q: '“If it’s a dog, it’s a mammal. X is a mammal. Therefore X is a dog.” This argument is:', options: ['Valid by modus ponens', 'Invalid — affirming the consequent', 'Valid', 'Invalid — denying the antecedent'], answer: 1 },
+  { id: 205, category: 'hardcrit', q: '“If it rained, the ground is wet. The ground is not wet. Therefore it did not rain.” This is:', options: ['Valid (modus tollens)', 'Invalid — denying the antecedent', 'Invalid — affirming the consequent', 'Valid only sometimes'], answer: 0 },
+  { id: 206, category: 'hardcrit', q: 'Oxygen is necessary for fire but not sufficient. This means:', options: ['Fire can occur without oxygen', 'Oxygen alone guarantees fire', 'Without oxygen there is no fire, but oxygen alone won’t cause it', 'Oxygen is irrelevant to fire'], answer: 2 },
+  { id: 207, category: 'hardcrit', q: '“All cats are animals. Some pets are animals. Therefore some pets are cats.” This is:', options: ['Valid', 'Invalid', 'Valid because cats are pets', 'Valid because some animals are pets'], answer: 1 },
+  { id: 208, category: 'hardcrit', q: 'In modern formal logic, does “All unicorns have one horn” imply “Some unicorn has one horn”?', options: ['Yes, always', 'No — a universal claim doesn’t assert that any such thing exists', 'Yes, only for real things', 'It is a contradiction'], answer: 1 },
+  { id: 209, category: 'hardcrit', q: 'A treatment has a higher recovery rate than another in men AND in women separately, yet a lower rate overall. How can this be?', options: ['It is an arithmetic error', 'Simpson’s paradox — group sizes/confounding reverse the aggregate', 'The data must be fabricated', 'Only if the groups are equal in size'], answer: 1 },
+  { id: 210, category: 'hardcrit', q: 'Athletes featured on a magazine cover often perform worse afterward (the “curse”). The best explanation is:', options: ['The cover is genuinely unlucky', 'Regression to the mean — they were picked after an exceptional peak', 'Media pressure ruins them', 'Pure coincidence'], answer: 1 },
+  { id: 211, category: 'hardcrit', q: 'Countries that eat more chocolate have more Nobel laureates per capita. The safest conclusion is:', options: ['Chocolate boosts intelligence', 'A confounder such as national wealth likely drives both', 'Nobel winners simply love chocolate', 'Eating chocolate is proven to cause prizes'], answer: 1 },
+  { id: 212, category: 'hardcrit', q: 'A fair coin has just landed heads five times in a row. The next flip is:', options: ['More likely tails, to balance out', 'Still 50/50 — flips are independent', 'More likely heads, it is “hot”', 'Impossible to say'], answer: 1 },
+  { id: 213, category: 'hardcrit', q: 'A bet: 1% chance to win $100, otherwise you lose $2. Its expected value is:', options: ['+$1.00', '−$0.98', '+$98.00', '−$2.00'], answer: 1 },
+  { id: 214, category: 'hardcrit', q: 'You paid $50 for a concert ticket but now feel too sick to enjoy it. A rational decision should be based on:', options: ['The $50 already spent', 'Only the future costs and benefits from now on', 'How much you paid', 'Commitment to the original plan'], answer: 1 },
+  { id: 215, category: 'hardcrit', q: 'In a single one-shot Prisoner’s Dilemma, the dominant strategy for a purely self-interested player is to:', options: ['Cooperate', 'Defect', 'Choose at random', 'Cooperate only if the other does'], answer: 1 },
+  { id: 216, category: 'hardcrit', q: 'A high P(positive test | disease) does NOT imply a high P(disease | positive test) because:', options: ['The two are always equal', 'The base rate (how common the disease is) also matters', 'Tests are inherently unreliable', 'Probability is only asymmetric for common events'], answer: 1 },
+  { id: 217, category: 'hardcrit', q: '“The lamp is on if and only if the switch is up.” The lamp is OFF and the switch is UP. What follows?', options: ['The biconditional is violated (false) in this situation', 'The switch must really be down', 'The lamp must really be on', 'Nothing at all follows'], answer: 0 },
+  { id: 218, category: 'hardcrit', q: '“Everyone loves someone” vs “There is someone whom everyone loves.” These two statements are:', options: ['Logically equivalent', 'Different — the second is stronger and implies the first', 'Different — the first is stronger', 'Both meaningless'], answer: 1 },
+  { id: 219, category: 'hardcrit', q: 'The contrapositive of “If A then B” is:', options: ['If B then A', 'If not A then not B', 'If not B then not A', 'If not B then A'], answer: 2 },
+  { id: 220, category: 'hardcrit', q: '“Only citizens may vote. Maria voted. Therefore Maria is a citizen.” This argument is:', options: ['Valid', 'Invalid — affirming the consequent', 'Invalid — illicit conversion', 'Invalid — circular'], answer: 0 },
+  { id: 221, category: 'hardcrit', q: 'No A are B, and all B are C. What necessarily follows about A and C?', options: ['No A are C', 'All A are C', 'Some A are C', 'Nothing necessarily follows'], answer: 3 },
+  { id: 222, category: 'hardcrit', q: 'On an island, knights always tell the truth and knaves always lie. A resident says, “I am a knave.” What is this person?', options: ['A knight', 'A knave', 'Impossible — no islander could say this', 'An ordinary person'], answer: 2 },
+  { id: 223, category: 'hardcrit', q: 'A says “B is a knight.” B says “A and I are of different types.” (Knights tell truth, knaves lie.) What are they?', options: ['Both knights', 'Both knaves', 'A is a knight, B a knave', 'A is a knave, B a knight'], answer: 1 },
+  { id: 224, category: 'hardcrit', q: 'Prior chance of rain is 30%. A forecast is right 80% of the time either way and it predicts rain. The updated chance of rain is about:', options: ['About 80%', 'About 63%', 'About 30%', 'About 50%'], answer: 1 },
+  { id: 225, category: 'hardcrit', q: '“Either this whole number is even or it is odd.” This either/or split is:', options: ['A false dilemma', 'Legitimate — the options are mutually exclusive and exhaustive', 'Circular reasoning', 'A slippery slope'], answer: 1 },
+  { id: 226, category: 'hardcrit', q: '“A feather is light. What is light cannot be dark. So a feather cannot be dark.” The flaw is:', options: ['Equivocation — “light” shifts meaning', 'The argument is actually valid', 'Affirming the consequent', 'Circular reasoning'], answer: 0 },
+  { id: 227, category: 'hardcrit', q: 'A result reported as “statistically significant (p < 0.05)” means:', options: ['The effect is large', 'The finding is practically important', 'If there were truly no effect, data this extreme would occur under 5% of the time', 'The hypothesis has been proven true'], answer: 2 },
+  { id: 228, category: 'hardcrit', q: 'A p-value of 0.03 means “the probability that the null hypothesis is true is 3%.” This is:', options: ['Correct', 'Wrong — a p-value is P(data | null), not P(null | data)', 'Correct only for large samples', 'True by definition'], answer: 1 },
+  { id: 229, category: 'hardcrit', q: 'WWII analysts saw returning planes were most often hit on the wings, so proposed armoring the wings. Abraham Wald argued to instead armor:', options: ['The wings, where the holes are', 'The areas with NO holes — planes hit there didn’t return', 'The whole plane equally', 'Only the tail'], answer: 1 },
+  { id: 230, category: 'hardcrit', q: 'Given “If A, then (if B then C)”, and you know A and B are both true, what follows?', options: ['C', 'Not C', 'B only', 'Nothing'], answer: 0 },
+  { id: 231, category: 'hardcrit', q: 'By De Morgan’s laws, the negation of “A and B” is:', options: ['not A and not B', 'not A or not B', 'A or B', 'not (A or B)'], answer: 1 },
+  { id: 232, category: 'hardcrit', q: '“Either the butler or the maid did it. The butler didn’t. Therefore the maid did.” This reasoning is:', options: ['Valid (disjunctive syllogism)', 'Invalid', 'A false dilemma', 'Circular'], answer: 0 },
+  { id: 233, category: 'hardcrit', q: '“All dogs are animals. All cats are animals. Therefore all dogs are cats.” The fallacy is:', options: ['Undistributed middle', 'The argument is valid', 'Affirming the consequent', 'Equivocation'], answer: 0 },
+  { id: 234, category: 'hardcrit', q: 'Every number divisible by 6 is divisible by 3. So being divisible by 3 is, for divisibility by 6:', options: ['Sufficient', 'Necessary but not sufficient', 'Both necessary and sufficient', 'Neither'], answer: 1 },
+  { id: 235, category: 'hardcrit', q: 'Events A and B are independent with P(A) = P(B) = 0.5. What is P(A or B)?', options: ['0.25', '0.5', '0.75', '1.0'], answer: 2 },
+  { id: 236, category: 'hardcrit', q: 'Across regions, average income correlates with average health. Concluding a given individual’s income predicts their health is:', options: ['Perfectly valid', 'The ecological fallacy — group correlations needn’t hold for individuals', 'Regression to the mean', 'Base-rate neglect'], answer: 1 },
+  { id: 237, category: 'hardcrit', q: 'Firing a gun at a wall and then painting a target around the tightest cluster of holes illustrates the:', options: ['Texas sharpshooter fallacy', 'Slippery slope', 'Straw man', 'Gambler’s fallacy'], answer: 0 },
+  { id: 238, category: 'hardcrit', q: '“Necessarily, if John is a bachelor then John is unmarried.” Does it follow that “If John is a bachelor, then he is necessarily unmarried”?', options: ['Yes, they say the same thing', 'No — it wrongly shifts the scope of “necessarily”', 'Yes, if John exists', 'Only if bachelors exist'], answer: 1 },
+  { id: 239, category: 'hardcrit', q: 'A family has two children and at least one is a boy. Assuming boys and girls are equally likely, the probability both are boys is:', options: ['1/2', '1/3', '2/3', '1/4'], answer: 1 },
+  { id: 240, category: 'hardcrit', q: 'A DNA match has a 1-in-a-million random chance. A lawyer says “so there’s only a 1-in-a-million chance he’s innocent.” This confuses:', options: ['P(match | innocent) with P(innocent | match)', 'Nothing — it is correct', 'Correlation with causation', 'Sample size with effect size'], answer: 0 },
+  { id: 241, category: 'hardcrit', q: 'A logically valid argument can still have a false conclusion when:', options: ['Never — valid means the conclusion is true', 'One or more of its premises are false', 'Its logical form is broken', 'It is unpersuasive'], answer: 1 },
+  { id: 242, category: 'hardcrit', q: 'A “sound” argument is defined as one that is:', options: ['Valid and has all true premises', 'Merely valid', 'Persuasive to most people', 'Valid or has true premises'], answer: 0 },
+  { id: 243, category: 'hardcrit', q: 'The sentence “This statement is false” is best described as:', options: ['Simply true', 'Simply false', 'A paradox — it can be neither consistently true nor false', 'Meaningless nonsense'], answer: 2 },
+  { id: 244, category: 'hardcrit', q: 'In rock-paper-scissors, rock beats scissors, scissors beats paper, paper beats rock. The relation “beats” is therefore:', options: ['Transitive', 'Non-transitive (intransitive)', 'Symmetric', 'Reflexive'], answer: 1 },
+  { id: 245, category: 'hardcrit', q: 'In classical logic, the conditional “If the moon is made of cheese, then 2 + 2 = 4” is:', options: ['True (vacuously — the antecedent is false)', 'False', 'Undefined', 'A contradiction'], answer: 0 },
+  { id: 246, category: 'hardcrit', q: 'An online poll on a gaming website finds 92% of respondents love video games. The core flaw is:', options: ['A self-selected, non-representative sample', 'The sample is too large', 'Correlation mistaken for causation', 'Regression to the mean'], answer: 0 },
+  { id: 247, category: 'hardcrit', q: 'If you run 100 independent hypothesis tests at p < 0.05 and every null hypothesis is actually true, about how many “significant” results do you expect by chance?', options: ['0', 'About 5', 'About 50', 'About 95'], answer: 1 },
+  { id: 248, category: 'hardcrit', q: 'A weather app is 90% accurate in a desert where it rains only 3 days a year. It predicts rain tomorrow. This prediction is:', options: ['Very likely correct — it is 90% accurate', 'Probably wrong — the extremely low base rate means most “rain” predictions are false alarms', 'Certainly correct', 'Impossible to evaluate'], answer: 1 },
+  { id: 249, category: 'hardcrit', q: '“Everything has a cause. So the universe as a whole has a cause.” The reasoning may commit the:', options: ['Fallacy of composition — what’s true of every part need not be true of the whole', 'Modus ponens', 'Affirming the consequent', 'Denying the antecedent'], answer: 0 },
+  { id: 250, category: 'hardcrit', q: 'Two boxes: one has 2 gold coins, one has 1 gold + 1 silver. You pick a box at random, draw a coin, and it’s gold. What is the chance the other coin in that box is also gold?', options: ['1/2', '2/3', '1/3', '3/4'], answer: 1 },
 ];
 
 export function getQuizQuestions(categoryIds, count = 10, lang = 'en') {
@@ -252,11 +312,14 @@ export function getQuizQuestions(categoryIds, count = 10, lang = 'en') {
     const local = pack && pack[q.id];
     const text = local ? local.q : q.q;
     const baseOptions = local ? local.options : q.options;
+    const meta = CATEGORY_META[q.category] || {};
     // shuffle options, track new answer index
     const idx = baseOptions.map((_, i) => i).sort(() => Math.random() - 0.5);
     return {
       ...q,
       q: text,
+      time: q.time ?? meta.time,   // per-question timer (seconds); undefined = default
+      max: q.max ?? meta.max,      // per-question max points; undefined = default scoring
       options: idx.map(i => baseOptions[i]),
       answer: idx.indexOf(q.answer),
     };

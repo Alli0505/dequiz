@@ -16,9 +16,16 @@ const loadLang = () => localStorage.getItem(LANG_KEY) || 'en';
 
 const plural = (lang, n) => (lang === 'en' && n !== 1 ? 's' : '');
 
-// points for a correct answer: base + speed bonus (up to 60) + streak bonus
-function pointsFor(timeLeft, streak) {
-  return 100 + Math.round((Math.max(0, timeLeft) / QTIME) * 60) + (streak - 1) * 20;
+// points for a correct answer.
+// Questions with a fixed `max` (hard set): 40% base + up to 60% speed, capped at max, no streak.
+// Default questions: 100 base + up to 60 speed bonus + streak bonus.
+function pointsFor(timeLeft, streak, q) {
+  const limit = q?.time || QTIME;
+  const speedFrac = Math.max(0, timeLeft) / limit;
+  if (q?.max) {
+    return Math.min(q.max, Math.round(q.max * (0.4 + 0.6 * speedFrac)));
+  }
+  return 100 + Math.round(60 * speedFrac) + (streak - 1) * 20;
 }
 
 function resultMsg(lang, score) {
@@ -99,7 +106,7 @@ export default function App() {
       const results = [...s.results];
       results[s.index] = isRight;
       const streak = isRight ? s.streak + 1 : 0;
-      const gained = isRight ? pointsFor(timeLeft, streak) : 0;
+      const gained = isRight ? pointsFor(timeLeft, streak, q) : 0;
       return {
         ...s, picked: i, results,
         correct: s.correct + (isRight ? 1 : 0),
@@ -399,7 +406,8 @@ function Quiz({ lang, session, onPick, onNext, muted, onToggleMute }) {
   const cat = CATEGORIES.find(c => c.id === q.category);
   const catName = (CATEGORY_T[lang] || CATEGORY_T.en)[q.category].name;
 
-  const [remaining, setRemaining] = useState(QTIME * 1000);
+  const limit = (q.time || QTIME) * 1000;
+  const [remaining, setRemaining] = useState(limit);
   const answeredRef = useRef(answered);
   answeredRef.current = answered;
   const remainingRef = useRef(remaining);
@@ -407,18 +415,18 @@ function Quiz({ lang, session, onPick, onNext, muted, onToggleMute }) {
 
   // per-question countdown; resets when the question changes, stops on answer
   useEffect(() => {
-    setRemaining(QTIME * 1000);
+    setRemaining(limit);
     const start = performance.now();
     const id = setInterval(() => {
       if (answeredRef.current) { clearInterval(id); return; }
-      const rem = QTIME * 1000 - (performance.now() - start);
+      const rem = limit - (performance.now() - start);
       if (rem <= 0) { setRemaining(0); clearInterval(id); onPick(-1, 0); return; }
       setRemaining(rem);
     }, 100);
     return () => clearInterval(id);
   }, [q.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pct = Math.max(0, (remaining / (QTIME * 1000)) * 100);
+  const pct = Math.max(0, (remaining / limit) * 100);
   const timedOut = session.picked === -1;
 
   return (
