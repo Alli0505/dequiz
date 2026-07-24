@@ -16,16 +16,13 @@ const loadLang = () => localStorage.getItem(LANG_KEY) || 'en';
 
 const plural = (lang, n) => (lang === 'en' && n !== 1 ? 's' : '');
 
-// points for a correct answer.
-// Questions with a fixed `max` (hard set): 40% base + up to 60% speed, capped at max, no streak.
-// Default questions: 100 base + up to 60 speed bonus + streak bonus.
+// Points for a correct answer, capped at 100 per question (max = q.max || 100).
+// 50% base + up to 50% for speed, plus a small streak bonus — all capped at max.
 function pointsFor(timeLeft, streak, q) {
   const limit = q?.time || QTIME;
+  const max = q?.max || 100;
   const speedFrac = Math.max(0, timeLeft) / limit;
-  if (q?.max) {
-    return Math.min(q.max, Math.round(q.max * (0.4 + 0.6 * speedFrac)));
-  }
-  return 100 + Math.round(60 * speedFrac) + (streak - 1) * 20;
+  return Math.min(max, Math.round(max * (0.5 + 0.5 * speedFrac)) + (streak - 1) * 10);
 }
 
 function resultMsg(lang, score) {
